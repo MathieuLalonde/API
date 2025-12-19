@@ -50,19 +50,28 @@ jobs:
           
           # Verify remote directory exists
           ssh -p $SSH_PORT ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "test -d ~/www/$REMOTE_PATH/public_html" || \
-            { echo "Remote directory ~/www/$REMOTE_PATH/public_html does not exist"; exit 1; }
+            "test -d ~/www/$REMOTE_PATH" || \
+            { echo "Remote directory ~/www/$REMOTE_PATH does not exist"; exit 1; }
           
           echo "✓ REMOTE_PATH validated: $REMOTE_PATH"
-          echo "✓ Destination: ~/www/$REMOTE_PATH/public_html/"
+          echo "✓ Destination: ~/www/$REMOTE_PATH/ (vendor, composer.json)"
+          echo "✓ Web root: ~/www/$REMOTE_PATH/public_html/ (from ./public/)"
 
       - name: Dry-run deployment
         run: |
           echo "========================================"
           echo "DRY RUN - No files will be changed"
-          echo "Source: ./public/"
-          echo "Destination: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/"
           echo "========================================"
+          echo "Step 1: Deploy vendor/ & composer.json to ~/www/$REMOTE_PATH/"
+          rsync -chavzn --delete-after --keep-dirlinks \
+            -e "ssh -p $SSH_PORT" \
+            --include='vendor/***' \
+            --include='composer.json' \
+            --exclude='*' \
+            ./ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/
+          echo ""
+          echo "Step 2: Deploy public/ contents to ~/www/$REMOTE_PATH/public_html/"
           rsync -chavzn --delete --keep-dirlinks \
             -e "ssh -p $SSH_PORT" \
             ./public/ \
@@ -73,11 +82,22 @@ jobs:
 
       - name: Deploy via Rsync
         run: |
-          echo "Starting actual deployment..."
+          echo "Starting deployment..."
+          echo "[1/2] Deploying vendor/ and composer.json to root..."
+          rsync -chavz --delete-after --keep-dirlinks \
+            -e "ssh -p $SSH_PORT" \
+            --include='vendor/***' \
+            --include='composer.json' \
+            --exclude='*' \
+            ./ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/
+          
+          echo "[2/2] Deploying public/ to public_html/..."
           rsync -chavz --delete --keep-dirlinks \
             -e "ssh -p $SSH_PORT" \
             ./public/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/
+          
           echo "✓ Deployment complete!"
 
         # -c compares file changes by checksum, not modification time

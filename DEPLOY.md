@@ -29,7 +29,7 @@ The GitHub Action will automatically:
 2. Validate `REMOTE_PATH` matches `.com` domain
 3. Verify remote directory exists via SSH
 4. Run dry-run rsync to show pending changes
-5. Deploy `./public/` → `~/www/api.mathieulalonde.com/public_html/`
+5. Deploy entire project (vendor/, public/, composer.json) → `~/www/api.mathieulalonde.com/`
 6. Tag the deployment as `staging`
 
 ### 3. Verify Deployment
@@ -61,11 +61,22 @@ The workflow now includes:
 API/
 ├── .github/workflows/deploy.yaml  # Auto-deploy on push to main
 ├── public/
-│   ├── index.php     # Slim 4 app entry point
+│   ├── index.php     # Slim 4 app entry point (document root)
 │   └── .htaccess     # URL rewriting for clean routes
-├── vendor/           # Composer dependencies (generated)
+├── vendor/           # Composer dependencies (deployed to server)
 ├── composer.json     # PHP dependencies (Slim 4)
 └── probe.txt         # Deployment validation file
+```
+
+**SiteGround Structure After Deployment:**
+```
+~/www/api.mathieulalonde.com/
+├── public/          # This is your document root
+│   ├── index.php
+│   └── .htaccess
+├── vendor/
+│   └── autoload.php
+└── composer.json
 ```
 
 ## Local Development
@@ -103,7 +114,8 @@ curl http://localhost:8000/
 **Remote Directory Not Found**
 - Check domain spelling: `REMOTE_PATH: api.mathieulalonde.com`
 - Verify domain exists in SiteGround: Sites → Manage → Domains
-- Check folder: `~/www/api.mathieulalonde.com/public_html/`
+- Check folder: `~/www/api.mathieulalonde.com/`
+- Verify `public/` is set as document root in SiteGround domain settings
 
 **Deployment Successful but 500 Error**
 - Check PHP error logs in SiteGround: Site Tools → Logs → Error Log

@@ -10,7 +10,8 @@
 ### 2. Verify SiteGround Setup
 - [ ] SSH access is enabled (Site Tools → Dev → SSH Keys)
 - [ ] Domain exists: `api.mathieulalonde.com`
-- [ ] Directory exists: `~/www/api.mathieulalonde.com/public_html/`
+- [ ] Directory exists: `~/www/api.mathieulalonde.com/`
+- [ ] **Important:** Document root is set to `public/` subdirectory in domain settings
 
 ### 3. Test Locally (Optional but Recommended)
 ```bash
@@ -55,12 +56,14 @@ curl https://api.mathieulalonde.com/health
 ✓ Dry-run preview before deployment  
 ✓ No deployment to empty/missing REMOTE_PATH  
 ✓ Composer dependencies installed in CI  
-✓ Only `./public/` folder is deployed  
+✓ Full project structure deployed (vendor/ + public/)  
+✓ Sensitive files excluded (.git, .env, .md files)  
 
 ## Troubleshooting
 
 **Workflow fails at "Validate REMOTE_PATH"**
-→ Check that `~/www/api.mathieulalonde.com/public_html/` exists on SiteGround
+→ Check that `~/www/api.mathieulalonde.com/` exists on SiteGround
+→ Verify domain document root points to the `public/` subdirectory
 
 **Workflow fails at "Setup SSH"**
 → Verify secrets are correctly set in GitHub

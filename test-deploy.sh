@@ -21,23 +21,24 @@ ssh -p $SSH_PORT ${SSH_USER}@${SSH_HOST} 'echo "✓ SSH connection successful"' 
 # Test 2: Verify remote directory exists
 echo -e "\n[2/4] Checking if remote directory exists..."
 ssh -p $SSH_PORT ${SSH_USER}@${SSH_HOST} \
-    "test -d ~/www/${REMOTE_PATH}/public_html && echo '✓ Directory exists: ~/www/${REMOTE_PATH}/public_html/' || echo '✗ Directory not found'" || exit 1
+    "test -d ~/www/${REMOTE_PATH} && echo '✓ Directory exists: ~/www/${REMOTE_PATH}/' || echo '✗ Directory not found'" || exit 1
 
 # Test 3: List current remote directory contents
 echo -e "\n[3/4] Current remote directory contents:"
 ssh -p $SSH_PORT ${SSH_USER}@${SSH_HOST} \
-    "ls -lah ~/www/${REMOTE_PATH}/public_html/" || echo "(Directory is empty or inaccessible)"
+    "ls -lah ~/www/${REMOTE_PATH}/" || echo "(Directory is empty or inaccessible)"
 
 # Test 4: Dry-run rsync to see what would be transferred
 echo -e "\n[4/4] Dry-run rsync (no files will be changed):"
-echo "Source: ./public/"
-echo "Destination: ${SSH_USER}@${SSH_HOST}:~/www/${REMOTE_PATH}/public_html/"
+echo "Source: ./ (entire project)"
+echo "Destination: ${SSH_USER}@${SSH_HOST}:~/www/${REMOTE_PATH}/"
 echo "-----------------------------------------"
 
 rsync -chavzn --delete --keep-dirlinks \
     -e "ssh -p ${SSH_PORT}" \
-    ./public/ \
-    ${SSH_USER}@${SSH_HOST}:~/www/${REMOTE_PATH}/public_html/
+    --exclude='.git' --exclude='.github' --exclude='*.md' \
+    ./ \
+    ${SSH_USER}@${SSH_HOST}:~/www/${REMOTE_PATH}/
 
 echo "========================================="
 echo "Test complete!"
