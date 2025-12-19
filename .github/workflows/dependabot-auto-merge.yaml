@@ -1,0 +1,152 @@
+name: Dependabot Auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_target:
+    types: [synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: dependabot-automerge-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  automerge:
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]') ||
+      (github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Read Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Skip major and 0.x minor/patch updates
+        uses: actions/github-script@v8
+        id: skip
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const updateType = "${{ steps.meta.outputs.update-type }}";
+
+            // Dependabot metadata
+            const nameMatch = pr.title.match(/bump (\S+) from/);
+            const versionMatch = pr.title.match(/ to ([0-9]+\.[0-9]+\.[0-9]+)/);
+
+            const depName = nameMatch ? nameMatch[1] : null;
+            const depVersion = versionMatch ? versionMatch[1] : null;
+
+            if (!depName || !depVersion) {
+              core.notice(`Could not parse dependency or version from PR title '${pr.title}' → skipping`);
+              process.exit(0); // safe skip
+            }
+
+            // If it's a major update → skip
+            if (updateType === "version-update:semver-major") {
+              core.notice(`Major update for ${depName} → manual review required.`);
+              process.exit(0);
+            }
+
+            // If it's semver-minor/patch BUT major is 0 → skip too
+            const major = parseInt(depVersion.split(".")[0], 10);
+            if (major === 0) {
+              core.notice(`0.x update for ${depName} (${depVersion}) → manual review required.`);
+              process.exit(0);
+            }
+
+      - name: Wait until PR is mergeable
+        id: pr
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.AUTO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) { core.notice("No PR → skip"); process.exit(0); }
+
+            const data = (await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            })).data;
+
+            core.setOutput("mergeable", data.mergeable === null ? "unknown" : data.mergeable.toString());
+            core.setOutput("mergeable_state", data.mergeable_state || "unknown");
+            core.setOutput("head_ref", data.head?.ref || "");
+            core.setOutput("sha", data.head?.sha || "");
+
+      - name: Verify checks and statuses
+        id: checks
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const sha = "${{ steps.pr.outputs.sha }}";
+            if (!sha) { core.notice("No SHA → skip"); process.exit(0); }
+
+            const combined = await github.rest.repos.getCombinedStatusForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha
+            });
+
+            const statusesOK = combined.state === 'success' || (combined.statuses || []).length === 0;
+
+            let checksOK = true;
+            try {
+              const ok = new Set(['success','neutral','skipped']);
+              const runs = (await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: sha,
+                filter: 'latest'
+              })).data.check_runs || [];
+
+              checksOK = runs.every(cr => ok.has(cr.conclusion || 'success'));
+            } catch {}
+
+            if (!statusesOK || !checksOK) {
+              core.notice(`Checks not passing → skip merge`);
+              process.exit(0);
+            }
+
+      - name: Merge PR (squash)
+        id: merge
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.AUTO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+
+            await github.rest.pulls.merge({
+              owner, repo, pull_number: number, merge_method: 'squash'
+            });
+            core.setOutput("merged", result.data.merged ? "true" : "false");
+
+      - name: Delete branch (Best effort)
+        if: ${{ steps.merge.outputs.merged == 'true' || false }}
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const ref = "heads/${{ steps.pr.outputs.head_ref }}";
+
+            try {
+              await github.rest.git.deleteRef({ owner, repo, ref });
+            } catch (e) {
+              core.warning(`Could not delete branch: ${e.message}`);
+            }

@@ -1,0 +1,120 @@
+name: Build and deploy with Rsync over SSH
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  SSH_PORT: 18765
+  # Required secrets:
+  # - SSH_USER
+  # - SSH_HOST
+  # - SSH_PRIVATE_KEY
+  # Required variables for each environment:
+  REMOTE_PATH: api.mathieulalonde.com
+  # Optional for staging environment:
+  # - BUILD_ARGUMENTS
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          extensions: pdo, pdo_mysql
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --no-progress --no-interaction --optimize-autoloader
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 400 ~/.ssh/id_rsa
+          ssh-keyscan -p $SSH_PORT -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Validate REMOTE_PATH
+        run: |
+          # Ensure REMOTE_PATH is not empty
+          [ -n "$REMOTE_PATH" ] || { echo "REMOTE_PATH is empty"; exit 1; }
+          
+          # Ensure it matches expected domain format (contains a dot)
+          echo "$REMOTE_PATH" | grep -q '\.com$' || { echo "REMOTE_PATH must be a .com domain: $REMOTE_PATH"; exit 1; }
+          
+          # Verify remote directory exists
+          ssh -p $SSH_PORT ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "test -d ~/www/$REMOTE_PATH/public_html" || \
+            { echo "Remote directory ~/www/$REMOTE_PATH/public_html does not exist"; exit 1; }
+          
+          echo "✓ REMOTE_PATH validated: $REMOTE_PATH"
+          echo "✓ Destination: ~/www/$REMOTE_PATH/public_html/"
+
+      - name: Dry-run deployment
+        run: |
+          echo "========================================"
+          echo "DRY RUN - No files will be changed"
+          echo "Source: ./public/"
+          echo "Destination: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/"
+          echo "========================================"
+          rsync -chavzn --delete --keep-dirlinks \
+            -e "ssh -p $SSH_PORT" \
+            ./public/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/
+          echo "========================================"
+          echo "Dry run complete. Review changes above."
+          echo "========================================"
+
+      - name: Deploy via Rsync
+        run: |
+          echo "Starting actual deployment..."
+          rsync -chavz --delete --keep-dirlinks \
+            -e "ssh -p $SSH_PORT" \
+            ./public/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/
+          echo "✓ Deployment complete!"
+
+        # -c compares file changes by checksum, not modification time
+        # -h (or --human-readable) outputs numbers in a more human readable format
+        # -a (or --archive) retains file attributes and permissions and recursively copies files and directories
+        # -v (or --verbose): shows status output
+        # -z (or --compress) Compresses file data during transfer
+        # --delete deletes files from the destination that aren’t found in the source (anymore)
+        # -n (or --dry-run): Performs a trial run without actually making any changes
+
+  tagging:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: ${{ success() }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo at deployed commit
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git (bot)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Move environment pointer tag
+        run: |
+          set -euo pipefail
+          TAG="staging"         # Tag for main/master branch deployments
+          SHA=$(git rev-parse HEAD)
+          git fetch --tags
+          git tag -d "$TAG" 2>/dev/null || true
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            git push origin :refs/tags/"$TAG"
+          fi
+          git tag -a "$TAG" -m "Deploy $TAG @ $SHA"
+          git push origin "refs/tags/$TAG"        

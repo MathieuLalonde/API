@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Backend PHP
+  - package-ecosystem: "composer"
+    directory: "/" # location of composer.json
+    schedule:
+      interval: "weekly"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

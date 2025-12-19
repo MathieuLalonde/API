@@ -1,0 +1,71 @@
+name: Retag Commit
+
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      tag_commit:
+        description: "Commit to tag (optional - not for workflow-modifying commits)"
+        required: false
+      tag_name:
+            description: "New tag to add"
+            required: true
+            default: "dev"
+
+permissions:
+  contents: write   # Needed to push tags
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Needed to get all history for tags
+          fetch-tags: true # also fetch all tags
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Select commit for tagging
+        id: select-commit
+        run: |
+          TAG_COMMIT="${{ github.event.inputs.tag_commit }}"
+          BRANCH="${{ github.ref_name }}"   # branch that triggered workflow
+
+          if [ -n "$TAG_COMMIT" ]; then
+            git fetch --all --tags
+
+            # Try to resolve as a commit SHA directly
+            if git cat-file -e "$TAG_COMMIT^{commit}" 2>/dev/null; then
+              SELECT_COMMIT="$TAG_COMMIT"
+            else
+              # Otherwise assume it's a branch name
+              SELECT_COMMIT=$(git rev-parse origin/"$TAG_COMMIT")
+            fi
+          else
+            echo "No commit specified, using current branch commit"
+            SELECT_COMMIT=$(git rev-parse HEAD)
+          fi
+
+          echo "commit=$SELECT_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Create or update environment tag
+        run: |
+          TAG_NAME=${{ github.event.inputs.tag_name }}
+          SELECT_COMMIT=${{ steps.select-commit.outputs.commit }}
+
+          git fetch --tags
+
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            git tag -d "$TAG_NAME"
+          fi
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
+            git push origin :refs/tags/"$TAG_NAME"
+          fi
+
+          git tag "$TAG_NAME" "$SELECT_COMMIT"
+          git push origin "$TAG_NAME"

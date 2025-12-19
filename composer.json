@@ -1,0 +1,17 @@
+{
+  "name": "yourname/my-php-api",
+  "description": "A minimal PHP API with Slim 4 and PHP 8",
+  "type": "project",
+  "require": {
+    "php": "^8.0",
+    "slim/slim": "^4.15",
+    "slim/psr7": "^1.7"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  },
+  "minimum-stability": "stable",
+  "license": "MIT"
+}
