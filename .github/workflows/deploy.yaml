@@ -1,10 +1,14 @@
 name: Build and deploy with Rsync over SSH
 
 on:
-  push:
-    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Commit SHA/tag to use (optional):"
+        required: false
 
 env:
+  SELECTED_COMMIT: ${{ inputs.commit_sha || github.sha }}
   SSH_PORT: 18765
   # Required secrets:
   # - SSH_USER
@@ -20,8 +24,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout selected commit
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SELECTED_COMMIT }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -57,28 +63,28 @@ jobs:
           echo "✓ Destination: ~/www/$REMOTE_PATH/ (vendor, composer.json)"
           echo "✓ Web root: ~/www/$REMOTE_PATH/public_html/ (from ./public/)"
 
-      - name: Dry-run deployment
-        run: |
-          echo "========================================"
-          echo "DRY RUN - No files will be changed"
-          echo "========================================"
-          echo "Step 1: Deploy vendor/ & composer.json to ~/www/$REMOTE_PATH/"
-          rsync -chavzn --delete-after --keep-dirlinks \
-            -e "ssh -p $SSH_PORT" \
-            --include='vendor/***' \
-            --include='composer.json' \
-            --exclude='*' \
-            ./ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/
-          echo ""
-          echo "Step 2: Deploy public/ contents to ~/www/$REMOTE_PATH/public_html/"
-          rsync -chavzn --delete --keep-dirlinks \
-            -e "ssh -p $SSH_PORT" \
-            ./public/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/
-          echo "========================================"
-          echo "Dry run complete. Review changes above."
-          echo "========================================"
+      # - name: Dry-run deployment
+      #   run: |
+      #     echo "========================================"
+      #     echo "DRY RUN - No files will be changed"
+      #     echo "========================================"
+      #     echo "Step 1: Deploy vendor/ & composer.json to ~/www/$REMOTE_PATH/"
+      #     rsync -chavzn --delete-after --keep-dirlinks \
+      #       -e "ssh -p $SSH_PORT" \
+      #       --include='vendor/***' \
+      #       --include='composer.json' \
+      #       --exclude='*' \
+      #       ./ \
+      #       ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/
+      #     echo ""
+      #     echo "Step 2: Deploy public/ contents to ~/www/$REMOTE_PATH/public_html/"
+      #     rsync -chavzn --delete --keep-dirlinks \
+      #       -e "ssh -p $SSH_PORT" \
+      #       ./public/ \
+      #       ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/public_html/
+      #     echo "========================================"
+      #     echo "Dry run complete. Review changes above."
+      #     echo "========================================"
 
       - name: Deploy via Rsync
         run: |
