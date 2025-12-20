@@ -1,0 +1,49 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api-php
+    working_dir: /var/www
+    volumes:
+      - ./src:/var/www/src:cached
+      - ./public:/var/www/public:cached
+      - ./composer.json:/var/www/composer.json:ro
+      - ./composer.lock:/var/www/composer.lock:ro
+      - vendor_data:/var/www/vendor
+    env_file: .env
+    depends_on:
+      - db
+
+  web:
+    image: nginx:alpine
+    container_name: api-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/public:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - vendor_data:/var/www/vendor:ro
+    depends_on:
+      - app
+
+  db:
+    image: postgres:16-alpine
+    container_name: api-postgres
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:    
+    driver: local
+  vendor_data:
+    driver: local

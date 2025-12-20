@@ -24,6 +24,23 @@ curl http://localhost:8000/health
 curl http://localhost:8000/health/db
 ```
 
+## Run locally with Docker (recommended)
+```bash
+# build and start services (php-fpm, nginx, postgres)
+docker compose up -d --build
+
+# install PHP dependencies inside the app container
+docker compose exec app composer install
+
+# check health endpoints
+curl http://localhost:8080/health
+curl http://localhost:8080/health/db
+
+# stop containers
+docker compose down → Container stops & is deleted, but pgdata volume persists. Data stays
+docker compose down -v → Deletes the containers AND the pgdata volume. Data is gone
+```
+
 ## Migrations (Flyway)
 - Keep Flyway config (`flyway.conf` or env vars) with your `jdbc:postgresql://` URL and credentials.
 - Common commands (adjust to your setup):
@@ -68,3 +85,6 @@ src/
 ## Notes
 - App starts without a DB; DB endpoints fail only when contacted.
 - Keep `.env` out of git; set `PG_*` on the server for production.
+
+## Update PHP version (per subdomain)
+- Change PHP version via Site Tools -> Devs -> PHP Manager
