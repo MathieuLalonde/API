@@ -89,9 +89,9 @@ src/
 ## Update PHP version (per subdomain)
 - Change PHP version via Site Tools -> Devs -> PHP Manager
 
-### Checking actual version running on SiteGround
+### Checking actual version running (and other info)
 
-To check exactly which PHP version is used for a  website, create a PHP file (ex: systeminfo.php) in the public_html folder:
+To access the info screen, create a PHP file (ex: systeminfo.php) in the public_html folder:
 
 `<?php phpinfo(); ?>`
 
