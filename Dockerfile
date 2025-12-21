@@ -1,10 +1,14 @@
 # PHP 8.5 with FPM and PostgreSQL PDO
 FROM php:8.5-fpm
 
-# Install Postgres dev libs and PHP extensions
+# Install system dependencies, Postgres dev libs, git, zip/unzip
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql \
+    && apt-get install -y --no-install-recommends \
+        libpq-dev \
+        git \
+        unzip \
+        libzip-dev \
+    && docker-php-ext-install pdo pdo_pgsql zip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Composer (for convenience inside container)
