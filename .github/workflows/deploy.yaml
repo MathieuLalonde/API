@@ -89,16 +89,17 @@ jobs:
       - name: Deploy via Rsync
         run: |
           echo "Starting deployment..."
-          echo "[1/2] Deploying vendor/ and composer.json to root..."
+          echo "[1/3] Deploying vendor/, src/, and composer.json to root..."
           rsync -chavz --delete-after --keep-dirlinks \
             -e "ssh -p $SSH_PORT" \
             --include='vendor/***' \
+            --include='src/***' \
             --include='composer.json' \
             --exclude='*' \
             ./ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/
           
-          echo "[2/2] Deploying public/ to public_html/..."
+          echo "[2/3] Deploying public/ to public_html/..."
           rsync -chavz --delete --keep-dirlinks \
             -e "ssh -p $SSH_PORT" \
             ./public/ \
