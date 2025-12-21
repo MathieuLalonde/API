@@ -13,9 +13,6 @@ return function (App $app) {
     // Health check routes
     $app->get('/health', [HealthController::class, 'status']);
     $app->get('/health/db', [HealthController::class, 'database']);
-    
-    // Diagnostics routes
-    $app->get('/_php_version', [DiagnosticsController::class, 'phpVersion']);
 
     // User CRUD routes
     $app->get('/users', [UserController::class, 'list']);
