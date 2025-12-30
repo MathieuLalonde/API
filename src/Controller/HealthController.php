@@ -21,7 +21,7 @@ class HealthController
         $data = [
             'status' => 'ok',
             'message' => 'API is running',
-            'timestamp' => date('Y-m-d H:i:s'),
+            'timestamp' => date('c'), // outputs: 2025-12-21T01:17:52+00:00
             'version' => '1.0.0',
         ];
 

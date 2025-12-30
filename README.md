@@ -46,7 +46,14 @@ docker compose down -v → Deletes the containers AND the pgdata volume. Data is
 - Common commands (adjust to your setup):
 ```bash
 # Run migrations
-flyway migrate
+# flyway migrate
+docker compose run --rm flyway
+
+# Any other command can be run by adding the command at the end of the docker command:
+# ex: flyway info -> docker compose run --rm flyway info
+
+# Flyway information
+flyway info
 
 # Validate migrations
 flyway validate
@@ -54,6 +61,36 @@ flyway validate
 # Baseline an existing DB (if needed)
 flyway baseline
 ```
+
+### Common approaches to prune/squash safely:
+
+- Dev-only (easy, destructive):
+  1. Create a single baseline migration that reflects current schema, e.g. db/migration/V1__baseline.sql (generate with pg_dump -s).
+  2. Drop the DB / run flyway clean, then migrate from the single file.
+```bash
+# generate baseline (example)
+pg_dump -s -U $PG_USER -d $PG_DB > db/migration/V1__baseline.sql
+
+# destructive reset (dev only)
+docker compose run --rm flyway clean
+docker compose run --rm flyway migrate
+```
+
+- Production (non-destructive, recommended):
+  1. Create V1__baseline.sql representing the current schema and commit it (keep an archive of old migrations).
+  2. Run Flyway baseline to mark the DB at that version (no schema changes).
+```bash
+docker compose run --rm flyway baseline -baselineVersion=1 -baselineDescription="squash before pruning"
+```
+  3. Remove old migration files from the repo (keep backups or an archive branch).
+
+#### Notes and tips
+
+Always test the procedure in staging first and take DB backups.
+- Keep a copy/archive of removed migrations (git branch/tag or a zip) for auditing/rollbacks.
+- Use flyway repair only to fix schema history after failed migrations — it does not replace careful pruning.
+- Flyway Teams/Pro features (undo, migrate callbacks) may offer extra options but are not required for squashing.
+
 
 ## Common Composer tasks
 ```bash
