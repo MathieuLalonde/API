@@ -1,11 +1,9 @@
 -- ----------------------------
 -- film
 -- ----------------------------
-ALTER TABLE film
-    ALTER COLUMN title SET NOT NULL;
 
-CREATE INDEX idx_film_title
-    ON film (title);
+CREATE UNIQUE INDEX ux_film_identity
+ON film (normalized_title, production_year);
 
 -- ----------------------------
 -- edition

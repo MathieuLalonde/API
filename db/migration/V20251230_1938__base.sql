@@ -1,7 +1,10 @@
 CREATE TABLE film (
     id                  BIGSERIAL PRIMARY KEY,
     title               TEXT NOT NULL,
-    production_year     INTEGER,
+    normalized_title    TEXT NOT NULL,
+    production_year     INTEGER NOT NULL,
+    sort_title          TEXT,
+    original_title      TEXT,
     running_time_min    INTEGER
 );
 
