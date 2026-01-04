@@ -11,12 +11,21 @@ CREATE TABLE film (
 CREATE TABLE edition (
     id                  BIGSERIAL PRIMARY KEY,
     film_id             BIGINT NOT NULL REFERENCES film(id) ON DELETE CASCADE,
+    external_id         TEXT NOT NULL,
+    external_id_base    TEXT,
+    external_id_type    TEXT,
+    external_locality_id INTEGER,
+    external_variant_num INTEGER,
+
+    previous_external_id TEXT,
 
     upc                 TEXT,
     release_date        DATE,
 
     media_type          TEXT NOT NULL, -- DVD | BLURAY | UHD
-    distributor         TEXT
+    distributor         TEXT,
+
+    last_edited_at      TIMESTAMPTZ
 );
 
 CREATE TABLE edition_region (
@@ -37,8 +46,7 @@ CREATE TABLE audio_track (
 );
 
 CREATE TABLE video_format (
-    id                      BIGSERIAL PRIMARY KEY,
-    edition_id              BIGINT NOT NULL REFERENCES edition(id) ON DELETE CASCADE,
+    edition_id              BIGINT PRIMARY KEY REFERENCES edition(id) ON DELETE CASCADE,
 
     -- color
     is_color                BOOLEAN,

@@ -127,7 +127,7 @@ function normalizeTitle(?string $title): ?string
   $title = iconv('UTF-8', 'ASCII//TRANSLIT', $title);
 
   // Remove leading articles
-  $title = preg_replace('/^(the|a|an)\s+/i', '', $title);
+  $title = preg_replace('/^(the|a|an|le|la|les|l\')\s+/i', '', $title);
 
   // Remove punctuation
   $title = preg_replace('/[^a-z0-9\s]/', '', $title);
@@ -202,6 +202,115 @@ $editionUpsertStmt = $pdo->prepare("
     RETURNING id
 ");
 
+$deleteEditionDiscStmt = $pdo->prepare("
+    DELETE FROM edition_disc WHERE edition_id = ?
+");
+
+$insertEditionDiscStmt = $pdo->prepare("
+    INSERT INTO edition_disc (
+        edition_id,
+        disc_number,
+        role,
+        label,
+        notes
+    ) VALUES (
+        :edition_id,
+        :disc_number,
+        :role,
+        :label,
+        :notes
+    )
+");
+
+$deleteAudioStmt = $pdo->prepare("
+    DELETE FROM audio_track WHERE edition_id = ?
+");
+
+$insertAudioStmt = $pdo->prepare("
+    INSERT INTO audio_track (
+        edition_id,
+        language,
+        channel_layout,
+        format,
+        is_descriptive
+    ) VALUES (
+        :edition_id,
+        :language,
+        :channel_layout,
+        :format,
+        :is_descriptive
+    )
+");
+
+$upsertVideoStmt = $pdo->prepare("
+    INSERT INTO video_format (
+        edition_id,
+
+        is_color,
+        is_black_and_white,
+        is_colorized,
+        is_mixed_color,
+
+        is_2d,
+        is_3d_anaglyph,
+        is_3d_bluray,
+
+        is_16x9,
+        aspect_ratio,
+        is_full_frame,
+        is_letterbox,
+        is_pan_and_scan,
+
+        is_dual_layered,
+        is_dual_sided,
+
+        video_standard
+    ) VALUES (
+        :edition_id,
+
+        :is_color,
+        :is_black_and_white,
+        :is_colorized,
+        :is_mixed_color,
+
+        :is_2d,
+        :is_3d_anaglyph,
+        :is_3d_bluray,
+
+        :is_16x9,
+        :aspect_ratio,
+        :is_full_frame,
+        :is_letterbox,
+        :is_pan_and_scan,
+
+        :is_dual_layered,
+        :is_dual_sided,
+
+        :video_standard
+    )
+    ON CONFLICT (edition_id)
+    DO UPDATE SET
+        is_color = EXCLUDED.is_color,
+        is_black_and_white = EXCLUDED.is_black_and_white,
+        is_colorized = EXCLUDED.is_colorized,
+        is_mixed_color = EXCLUDED.is_mixed_color,
+
+        is_2d = EXCLUDED.is_2d,
+        is_3d_anaglyph = EXCLUDED.is_3d_anaglyph,
+        is_3d_bluray = EXCLUDED.is_3d_bluray,
+
+        is_16x9 = EXCLUDED.is_16x9,
+        aspect_ratio = EXCLUDED.aspect_ratio,
+        is_full_frame = EXCLUDED.is_full_frame,
+        is_letterbox = EXCLUDED.is_letterbox,
+        is_pan_and_scan = EXCLUDED.is_pan_and_scan,
+
+        is_dual_layered = EXCLUDED.is_dual_layered,
+        is_dual_sided = EXCLUDED.is_dual_sided,
+
+        video_standard = EXCLUDED.video_standard
+");
+
 /*
 |--------------------------------------------------------------------------
 | Iterate titles
@@ -267,6 +376,116 @@ foreach ($xml->DVD as $dvd) {
 
   $editionId = $editionUpsertStmt->fetchColumn();
 
+  // ---- Discs (labels only - no technical data ownership) ----
+  // Rule: Create edition_disc rows only as organizational labels.
+  // Technical data (audio, video, features) stays at edition level.
+  // Do NOT push edition data down to discs.
+  $deleteEditionDiscStmt->execute([$editionId]);
+
+  if (isset($dvd->Discs->Disc)) {
+      $discNumber = 1;
+      foreach ($dvd->Discs->Disc as $disc) {
+
+          // Build notes for side info if dual-sided
+          $notes = null;
+          if (isset($disc->DiscIDSideA) && isset($disc->DiscIDSideB)) {
+              $notes = sprintf(
+                  "Side A: %s | Side B: %s",
+                  (string)$disc->DescriptionSideA ?: 'N/A',
+                  (string)$disc->DescriptionSideB ?: 'N/A'
+              );
+          }
+
+          // Use primary side description as role
+          $role = null;
+          if (isset($disc->DescriptionSideA)) {
+              $role = (string)$disc->DescriptionSideA;
+          } elseif (isset($disc->DescriptionSideB)) {
+              $role = (string)$disc->DescriptionSideB;
+          }
+
+          // Use primary side label
+          $label = null;
+          if (isset($disc->LabelSideA)) {
+              $label = (string)$disc->LabelSideA;
+          } elseif (isset($disc->LabelSideB)) {
+              $label = (string)$disc->LabelSideB;
+          }
+
+          // Create one edition_disc row per physical disc
+          $insertEditionDiscStmt->execute([
+              'edition_id'   => $editionId,
+              'disc_number'  => $discNumber,
+              'role'         => $role ?: null,
+              'label'        => $label ?: null,
+              'notes'        => $notes,
+          ]);
+
+          $discNumber++;
+      }
+  }
+
+  // Note: Physical disc metadata (fingerprints, dual-layer/sided)
+  // is NOT imported unless explicitly needed. Edition-level data is sufficient.
+
+  // ---- Audio ----
+  $deleteAudioStmt->execute([$editionId]);
+
+  if (isset($dvd->Audio->AudioTrack)) {
+      foreach ($dvd->Audio->AudioTrack as $track) {
+
+            $content = trim((string)$track->AudioContent);
+
+            $isDescriptive = strcasecmp($content, 'Audio Descriptive') === 0;
+
+            // normalize empty strings to null for text columns
+            $language = $isDescriptive ? null : ($content === '' ? null : $content);
+            $channelLayout = trim((string)$track->AudioChannels);
+            $channelLayout = $channelLayout === '' ? null : $channelLayout;
+            $format = trim((string)$track->AudioFormat);
+            $format = $format === '' ? null : $format;
+
+            $insertAudioStmt->execute([
+              'edition_id'     => $editionId,
+              'language'       => $language,
+              'channel_layout' => $channelLayout,
+              'format'         => $format,
+              'is_descriptive' => $isDescriptive ? 1 : 0,
+            ]);
+      }
+  }
+
+  // ---- Video ----
+  if (isset($dvd->Format)) {
+      $fmt = $dvd->Format;
+
+      $upsertVideoStmt->execute([
+          'edition_id'         => $editionId,
+
+          'is_color'           => filter_var($fmt->ColorFormat->ClrColor, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_black_and_white' => filter_var($fmt->ColorFormat->ClrBlackAndWhite, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_colorized'       => filter_var($fmt->ColorFormat->ClrColorized, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_mixed_color'     => filter_var($fmt->ColorFormat->ClrMixed, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+
+          'is_2d'              => filter_var($fmt->Dimensions->Dim2D, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_3d_anaglyph'     => filter_var($fmt->Dimensions->Dim3DAnaglyph, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_3d_bluray'       => filter_var($fmt->Dimensions->Dim3DBluRay, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+
+          'is_16x9'            => filter_var($fmt->Format16X9, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'aspect_ratio'       => $fmt->FormatAspectRatio !== null
+                                    ? (float)$fmt->FormatAspectRatio
+                                    : null,
+          'is_full_frame'      => filter_var($fmt->FormatFullFrame, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_letterbox'       => filter_var($fmt->FormatLetterBox, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_pan_and_scan'    => filter_var($fmt->FormatPanAndScan, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+
+          'is_dual_layered'    => filter_var($fmt->FormatDualLayered, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+          'is_dual_sided'      => filter_var($fmt->FormatDualSided, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+
+          'video_standard'     => (string)$fmt->FormatVideoStandard ?: null,
+      ]);
+  }
+
   echo "Imported edition {$externalId} (edition_id={$editionId})\n";
 }
 
@@ -286,4 +505,16 @@ if (!empty($importedExternalIds)) {
   $deleteStmt->execute($importedExternalIds);
 }
 
-echo "Import complete.\n";
+/*
+|--------------------------------------------------------------------------
+| Delete orphan films
+|--------------------------------------------------------------------------
+*/
+$pdo->exec("
+    DELETE FROM film
+    WHERE id NOT IN (
+        SELECT DISTINCT film_id FROM edition
+    )
+");
+
+echo "\nImport complete.\n";
