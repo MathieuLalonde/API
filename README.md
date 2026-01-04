@@ -6,6 +6,7 @@ Minimal Slim 4 API with layered structure (controller/service/repository/DTO) an
 - PHP 8.0+ with `pdo_pgsql`
 - Composer
 - PostgreSQL reachable (local for dev; remote for prod)
+- Make (for script) - install via `choco install make`
 
 ## Setup
 ```bash
