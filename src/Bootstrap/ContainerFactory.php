@@ -10,6 +10,9 @@ use App\Infrastructure\Database\PdoFactory;
 use App\Domain\User\UserRepositoryInterface;
 use App\Infrastructure\Repository\PdoUserRepository;
 use App\Service\UserService;
+use App\Domain\Film\FilmRepositoryInterface;
+use App\Infrastructure\Repository\PdoFilmRepository;
+use App\Infrastructure\Repository\PdoEditionRepository;
 
 /**
  * Dependency Injection container configuration.
@@ -29,6 +32,14 @@ class ContainerFactory
             // Repositories
             UserRepositoryInterface::class => function (ContainerInterface $c) {
                 return new PdoUserRepository($c->get(PDO::class));
+            },
+
+            FilmRepositoryInterface::class => function (ContainerInterface $c) {
+                return new PdoFilmRepository($c->get(PDO::class));
+            },
+
+            PdoEditionRepository::class => function (ContainerInterface $c) {
+                return new PdoEditionRepository($c->get(PDO::class));
             },
 
             // Services

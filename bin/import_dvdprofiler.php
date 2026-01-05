@@ -55,7 +55,8 @@ loadDotEnv(dirname(__DIR__) . '/.env');
 | Database connection (use .env values when present)
 |--------------------------------------------------------------------------
 */
-$host = getenv('PG_HOST') ?: getenv('DB_HOST') ?: 'localhost';
+// $host = getenv('PG_HOST') ?: getenv('DB_HOST') ?: 'localhost';
+$host = 'localhost';
 $port = getenv('PG_PORT') ?: '5432';
 $db   = getenv('PG_DB') ?: 'dvdprofiler';
 $user = getenv('PG_USER') ?: 'postgres';

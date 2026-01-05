@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Slim\App;
 use App\Controller\HealthController;
 use App\Controller\UserController;
+use App\Controller\FilmController;
+use App\Controller\EditionController;
 
 /**
  * Register all application routes.
@@ -27,4 +29,11 @@ return function (App $app) {
   $app->get('/users/{id}', [UserController::class, 'getById']);
   $app->put('/users/{id}', [UserController::class, 'update']);
   $app->delete('/users/{id}', [UserController::class, 'delete']);
+
+  // Film routes
+  $app->get('/films', [FilmController::class, 'list']);
+  $app->get('/films/{id}', [FilmController::class, 'show']);
+
+  // Edition routes
+  $app->get('/editions/{id}', [EditionController::class, 'show']);
 };

@@ -3,6 +3,12 @@
 build: 
 	docker compose up -d --build
 
+install:
+	docker compose exec php composer install
+
+# To install or update dependencies, run:
+# docker compose run --rm php composer install
+
 up:
 	docker compose up -d $(filter-out $@,$(MAKECMDGOALS))
 
