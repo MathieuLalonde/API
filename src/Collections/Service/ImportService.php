@@ -574,15 +574,104 @@ class ImportService
                 'rating_details' => $ratingDetails,
             ]);
         } else {
-            $this->repository->updateFilmRating($filmId, [
-                'rating_system' => $ratingSystem,
-                'rating' => $rating,
-                'rating_age' => $ratingAge,
-                'rating_details' => $ratingDetails,
+            // Merge with existing film data
+            $existingFilm = $this->repository->getFilmById($filmId);
+            if (!$existingFilm) {
+                throw new \RuntimeException("Film with ID {$filmId} not found");
+            }
+
+            // Merge titles: prefer title that appears as original_title somewhere
+            $mergedTitle = $this->mergeTitle(
+                $existingFilm['title'],
+                $existingFilm['original_title'],
+                $title,
+                $origTitle
+            );
+            $mergedSortTitle = $existingFilm['sort_title'] ?: $sortTitle;
+            $mergedOrigTitle = $existingFilm['original_title'] ?: $origTitle;
+
+            // Merge runtime: use shortest (most accurate, longer ones are usually extended cuts)
+            $mergedRuntime = $this->mergeRuntime($existingFilm['running_time_min'], $runtime);
+
+            // Fill NULLs for rating fields, but prefer incoming if both exist
+            $mergedRatingSystem = $existingFilm['rating_system'] ?: $ratingSystem;
+            $mergedRating = $existingFilm['rating'] ?: $rating;
+            $mergedRatingAge = $existingFilm['rating_age'] ?: $ratingAge;
+            $mergedRatingDetails = $existingFilm['rating_details'] ?: $ratingDetails;
+
+            // Update film with merged data
+            $this->repository->updateFilm($filmId, [
+                'title' => $mergedTitle,
+                'sort_title' => $mergedSortTitle,
+                'original_title' => $mergedOrigTitle,
+                'normalized_title' => TitleNormalizer::normalize($mergedTitle),
+                'running_time_min' => $mergedRuntime,
+                'rating_system' => $mergedRatingSystem,
+                'rating' => $mergedRating,
+                'rating_age' => $mergedRatingAge,
+                'rating_details' => $mergedRatingDetails,
             ]);
         }
 
         return $filmId;
+    }
+
+    /**
+     * Merge runtime values, preferring shortest (most accurate).
+     *
+     * @param int|null $existing Existing runtime
+     * @param int|null $incoming Incoming runtime
+     * @return int|null Merged runtime
+     */
+    private function mergeRuntime(?int $existing, ?int $incoming): ?int
+    {
+        if ($existing === null) {
+            return $incoming;
+        }
+        if ($incoming === null) {
+            return $existing;
+        }
+        // Use shortest runtime (most accurate, longer ones are usually extended cuts)
+        return min($existing, $incoming);
+    }
+
+    /**
+     * Merge title values, preferring title that appears as original_title somewhere.
+     *
+     * @param string|null $existingTitle Existing title
+     * @param string|null $existingOrigTitle Existing original title
+     * @param string|null $incomingTitle Incoming title
+     * @param string|null $incomingOrigTitle Incoming original title
+     * @return string|null Merged title
+     */
+    private function mergeTitle(?string $existingTitle, ?string $existingOrigTitle, ?string $incomingTitle, ?string $incomingOrigTitle): ?string
+    {
+        // Fill NULLs
+        if ($existingTitle === null) {
+            return $incomingTitle;
+        }
+        if ($incomingTitle === null) {
+            return $existingTitle;
+        }
+
+        // If both exist, prefer title that appears as original_title somewhere
+        $existingTitleNorm = TitleNormalizer::normalize($existingTitle);
+        $incomingTitleNorm = TitleNormalizer::normalize($incomingTitle);
+        $existingOrigTitleNorm = TitleNormalizer::normalize($existingOrigTitle);
+        $incomingOrigTitleNorm = TitleNormalizer::normalize($incomingOrigTitle);
+
+        // If incoming title matches existing original_title, prefer incoming
+        if ($existingOrigTitleNorm !== null && $incomingTitleNorm === $existingOrigTitleNorm) {
+            return $incomingTitle;
+        }
+
+        // If existing title matches incoming original_title, prefer existing
+        if ($incomingOrigTitleNorm !== null && $existingTitleNorm === $incomingOrigTitleNorm) {
+            return $existingTitle;
+        }
+
+        // Otherwise, prefer existing (keep first import's title)
+        return $existingTitle;
     }
 
     /**

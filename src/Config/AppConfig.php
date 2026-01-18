@@ -31,7 +31,8 @@ class AppConfig
     public static function get(string $key, ?string $default = null): ?string
     {
         self::load();
-        return getenv($key) ?: $default;
+        // Check $_ENV first (populated by dotenv), then getenv(), then default
+        return $_ENV[$key] ?? getenv($key) ?: $default;
     }
 
     public static function require(string $key): string

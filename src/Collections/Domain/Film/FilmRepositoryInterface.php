@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace App\Collections\Domain\Film;
 
-use App\Collections\DTO\FilmDTO;
-use App\Collections\DTO\FilmListItemDTO;
+use App\Collections\DTO\Film\FilmDTO;
+use App\Collections\DTO\Film\FilmListItemDTO;
 
 /**
  * Repository interface for film data access.

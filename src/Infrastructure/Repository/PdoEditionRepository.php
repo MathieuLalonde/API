@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Repository;
 
-use App\Collections\DTO\EditionDTO;
-use App\Collections\DTO\AudioTrackDTO;
-use App\Collections\DTO\VideoFormatDTO;
-use App\Collections\DTO\EditionDiscDTO;
+use App\Collections\DTO\Film\EditionDTO;
+use App\Collections\DTO\Film\AudioTrackDTO;
+use App\Collections\DTO\Film\VideoFormatDTO;
+use App\Collections\DTO\Film\EditionDiscDTO;
 use PDO;
 
 /**

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace App\Collections\DTO;
+namespace App\Collections\DTO\Film;
 
 /**
  * Lightweight DTO for film list results.

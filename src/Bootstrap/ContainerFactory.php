@@ -12,10 +12,14 @@ use App\Shared\Infrastructure\Repository\PdoUserRepository;
 use App\Shared\Service\UserService;
 use App\Collections\Domain\Film\FilmRepositoryInterface;
 use App\Infrastructure\Repository\PdoFilmRepository;
+use App\Collections\Domain\Album\AlbumRepositoryInterface;
+use App\Infrastructure\Repository\PdoAlbumRepository;
 use App\Infrastructure\Repository\PdoEditionRepository;
 use App\Collections\Service\ImportService;
 use App\Collections\Infrastructure\Repository\ImportRepository;
 use App\Collections\Infrastructure\Parser\DvdProfilerXmlParser;
+use App\Collections\Service\DiscogsImportService;
+use App\Collections\Infrastructure\Repository\DiscogsImportRepository;
 
 /**
  * Dependency Injection container configuration.
@@ -41,6 +45,10 @@ class ContainerFactory
                 return new PdoFilmRepository($c->get(PDO::class));
             },
 
+            AlbumRepositoryInterface::class => function (ContainerInterface $c) {
+                return new PdoAlbumRepository($c->get(PDO::class));
+            },
+
             PdoEditionRepository::class => function (ContainerInterface $c) {
                 return new PdoEditionRepository($c->get(PDO::class));
             },
@@ -63,6 +71,17 @@ class ContainerFactory
                 return new ImportService(
                     $c->get(DvdProfilerXmlParser::class),
                     $c->get(ImportRepository::class)
+                );
+            },
+
+            // Discogs import infrastructure
+            DiscogsImportRepository::class => function (ContainerInterface $c) {
+                return new DiscogsImportRepository($c->get(PDO::class));
+            },
+
+            DiscogsImportService::class => function (ContainerInterface $c) {
+                return new DiscogsImportService(
+                    $c->get(DiscogsImportRepository::class)
                 );
             },
         ]);

@@ -61,10 +61,13 @@ restore-db:
 	@read -p "Enter backup file path: " file; \
 	docker compose exec -T db psql -U $(PG_USER) $(PG_DB) < $$file
 
-# Reset database (drop volume, recreate, migrate)
+# Reset database (drop DB volume only, recreate, migrate) and restart all services
+# WARNING: This will delete all data in the database!
+# Note: vendor_data volume is preserved to avoid re-installing dependencies
 reset-db:
 	@echo "Resetting database..."
-	docker compose down -v
+	docker compose down db
+	docker volume rm api_pgdata 2>/dev/null || true
 	docker compose up -d db
 	$(MAKE) _internal_wait_db
 	docker compose --env-file .env run --rm flyway migrate
@@ -74,15 +77,19 @@ reset-db:
 # Usage: make import <filename> [NON_STREAMING=1]
 # File must be in manual_imports/ directory (mounted in container)
 # Set NON_STREAMING=1 to use full file load instead of streaming (for testing)
-import:
+import-dvd:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
 		echo "Error: File name required"; \
-		echo "Usage: make import <filename.xml> [NON_STREAMING=1]"; \
+		echo "Usage: make import-dvd <filename.xml> [NON_STREAMING=1]"; \
 		echo "File must be in manual_imports/ directory"; \
 		echo "Set NON_STREAMING=1 to use full file load (for testing)"; \
 		exit 1; \
 	fi
 	@MSYS_NO_PATHCONV=1 docker compose exec php sh -c 'php bin/import_dvdprofiler.php /var/www/manual_imports/$(filter-out $@,$(MAKECMDGOALS)) $(if $(NON_STREAMING),--non-streaming,)'
+
+import-discogs:
+	@MSYS_NO_PATHCONV=1 docker compose exec php sh -c 'php bin/import_discogs.php'
+
 
 # Ignore undefined targets to avoid errors
 %:

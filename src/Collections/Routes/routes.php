@@ -7,6 +7,7 @@ use Slim\Routing\RouteCollectorProxy;
 use App\Collections\Controller\FilmController;
 use App\Collections\Controller\EditionController;
 use App\Collections\Controller\ImportController;
+use App\Collections\Controller\AlbumController;
 
 /**
  * Register Collections-specific routes.
@@ -19,6 +20,10 @@ return function (RouteCollectorProxy $group) {
 
     // Edition routes
     $group->get('/editions/{id}', [EditionController::class, 'show']);
+
+    // Album routes
+    $group->get('/albums', [AlbumController::class, 'list']);
+    $group->get('/albums/{id}', [AlbumController::class, 'show']);
 
     // Import routes
     $group->post('/import', [ImportController::class, 'import']);

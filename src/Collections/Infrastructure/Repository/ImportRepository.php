@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Collections\Infrastructure\Repository;
 
+use App\Collections\Infrastructure\Import\TitleNormalizer;
 use PDO;
 use PDOStatement;
 
@@ -13,8 +14,11 @@ use PDOStatement;
 class ImportRepository
 {
     private PDOStatement $findFilmStmt;
+    private PDOStatement $findFilmsByYearStmt;
     private PDOStatement $insertFilmStmt;
     private PDOStatement $updateFilmRatingStmt;
+    private PDOStatement $updateFilmStmt;
+    private PDOStatement $getFilmByIdStmt;
     private PDOStatement $editionUpsertStmt;
     private PDOStatement $deleteEditionDiscStmt;
     private PDOStatement $insertEditionDiscStmt;
@@ -44,12 +48,27 @@ class ImportRepository
         $pdo->exec("SET client_encoding TO 'UTF8'");
 
         // Initialize prepared statements
+        // Note: findFilmStmt kept for backward compatibility but will be replaced with PHP-side matching
         $this->findFilmStmt = $pdo->prepare("
             SELECT id
             FROM film
             WHERE production_year = :year
               AND normalized_title = ANY(:candidates)
             LIMIT 1
+        ");
+
+        $this->findFilmsByYearStmt = $pdo->prepare("
+            SELECT id, title, sort_title, original_title, normalized_title, 
+                   production_year, running_time_min, rating_system, rating, rating_age, rating_details
+            FROM film
+            WHERE production_year = :year
+        ");
+
+        $this->getFilmByIdStmt = $pdo->prepare("
+            SELECT id, title, sort_title, original_title, normalized_title,
+                   production_year, running_time_min, rating_system, rating, rating_age, rating_details
+            FROM film
+            WHERE id = :film_id
         ");
 
         $this->insertFilmStmt = $pdo->prepare("
@@ -83,6 +102,20 @@ class ImportRepository
         $this->updateFilmRatingStmt = $pdo->prepare("
             UPDATE film
             SET rating_system = :rating_system,
+                rating = :rating,
+                rating_age = :rating_age,
+                rating_details = :rating_details
+            WHERE id = :film_id
+        ");
+
+        $this->updateFilmStmt = $pdo->prepare("
+            UPDATE film
+            SET title = :title,
+                sort_title = :sort_title,
+                original_title = :original_title,
+                normalized_title = :normalized_title,
+                running_time_min = :running_time_min,
+                rating_system = :rating_system,
                 rating = :rating,
                 rating_age = :rating_age,
                 rating_details = :rating_details
@@ -256,26 +289,39 @@ class ImportRepository
 
     /**
      * Find a film by year and normalized title candidates.
+     * Compares candidates against all three title fields (title, original_title, sort_title).
      *
-     * @param int $year Production year
+     * @param int|null $year Production year (can be null for TV shows)
      * @param array<string> $candidates Normalized title candidates
      * @return int|null Film ID or null if not found
      */
-    public function findFilmByTitleAndYear(int $year, array $candidates): ?int
+    public function findFilmByTitleAndYear(?int $year, array $candidates): ?int
     {
-        if (empty($candidates)) {
+        if (empty($candidates) || $year === null) {
             return null;
         }
 
-        $candidatesJson = '{' . implode(',', array_map(fn($v) => '"' . $v . '"', $candidates)) . '}';
+        // Load all films for this year
+        $this->findFilmsByYearStmt->execute(['year' => $year]);
+        $films = $this->findFilmsByYearStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $this->findFilmStmt->execute([
-            'year' => $year,
-            'candidates' => $candidatesJson,
-        ]);
+        // Compare candidates against all three title fields for each film
+        foreach ($films as $film) {
+            $filmTitleNorm = $film['normalized_title'];
+            $filmOrigTitleNorm = TitleNormalizer::normalize($film['original_title']);
+            $filmSortTitleNorm = TitleNormalizer::normalize($film['sort_title']);
 
-        $result = $this->findFilmStmt->fetchColumn();
-        return $result ? (int)$result : null;
+            // Check if any candidate matches any of the film's normalized title fields
+            foreach ($candidates as $candidate) {
+                if ($candidate === $filmTitleNorm ||
+                    ($filmOrigTitleNorm !== null && $candidate === $filmOrigTitleNorm) ||
+                    ($filmSortTitleNorm !== null && $candidate === $filmSortTitleNorm)) {
+                    return (int)$film['id'];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -291,6 +337,19 @@ class ImportRepository
     }
 
     /**
+     * Get film by ID.
+     *
+     * @param int $filmId Film ID
+     * @return array<string|int|null>|null Film data or null if not found
+     */
+    public function getFilmById(int $filmId): ?array
+    {
+        $this->getFilmByIdStmt->execute(['film_id' => $filmId]);
+        $result = $this->getFilmByIdStmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
      * Update film rating information.
      *
      * @param int $filmId Film ID
@@ -301,6 +360,20 @@ class ImportRepository
         $this->updateFilmRatingStmt->execute([
             'film_id' => $filmId,
             ...$ratingData,
+        ]);
+    }
+
+    /**
+     * Update all film fields.
+     *
+     * @param int $filmId Film ID
+     * @param array<string|int|null> $data Film data
+     */
+    public function updateFilm(int $filmId, array $data): void
+    {
+        $this->updateFilmStmt->execute([
+            'film_id' => $filmId,
+            ...$data,
         ]);
     }
 

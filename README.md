@@ -14,6 +14,7 @@ composer install
 # copy env template and edit
 copy .env.example .env   # Windows
 # set PG_* values if you want DB calls to work locally
+# set DISCOGS_USERNAME for Discogs LP collection import
 ```
 
 ## Run locally
@@ -127,6 +128,37 @@ The import process:
 - Creates/updates films and editions
 - Syncs relationships (genres, studios, countries, crew, regions, subtitles, features)
 - Removes orphaned editions and films not in the import
+
+## Import Discogs LP Collection
+
+Import your Discogs LP collection directly from the Discogs API:
+
+### Prerequisites
+
+Set `DISCOGS_USERNAME` in your `.env` file:
+```bash
+DISCOGS_USERNAME=kirkenshrir
+```
+
+### Using CLI Script
+
+```bash
+# With Docker
+docker compose exec app php bin/import_discogs.php
+
+# Without Docker (requires local PHP and DB connection)
+php bin/import_discogs.php
+```
+
+The import process:
+- Fetches collection from Discogs API (`/users/{username}/collection/folders/0/releases`)
+- Handles pagination automatically
+- Creates/updates albums (grouped by `master_id`) and releases
+- Syncs relationships (artists, labels, genres, styles, formats)
+- Stores media condition and sleeve condition
+- Removes orphaned releases and albums not in the import
+
+The script uses `discogs_instance_id` to detect changes in releases.
 
 ## Common Composer tasks
 ```bash
