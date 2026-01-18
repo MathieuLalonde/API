@@ -1,3 +1,7 @@
+CREATE SCHEMA IF NOT EXISTS collections;
+
+SET search_path TO collections;
+
 CREATE TABLE film (
     id                  BIGSERIAL PRIMARY KEY,
     title               TEXT NOT NULL,

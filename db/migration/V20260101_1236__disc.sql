@@ -1,3 +1,5 @@
+SET search_path TO collections;
+
 CREATE TABLE edition_disc (
     id              BIGSERIAL PRIMARY KEY,
     edition_id      BIGINT NOT NULL REFERENCES edition(id) ON DELETE CASCADE,

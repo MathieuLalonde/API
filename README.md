@@ -93,6 +93,41 @@ Always test the procedure in staging first and take DB backups.
 - Flyway Teams/Pro features (undo, migrate callbacks) may offer extra options but are not required for squashing.
 
 
+## Import DVD Profiler Data
+
+Import DVD Profiler XML export files into the database:
+
+### Using Make (recommended, with Docker)
+```bash
+# Place XML files in manual_imports/ directory (at project root)
+# Import a specific file by filename
+make import SampleCollection.xml
+```
+
+**Note**: The `manual_imports/` directory is mounted at `/var/www/manual_imports/` in the container. Place your XML files there and specify a filename to import.
+
+### Using CLI Script Directly
+```bash
+# With Docker
+docker compose exec php php bin/import_dvdprofiler.php samples/SampleCollection.xml
+
+# Without Docker (requires local PHP and DB connection)
+php bin/import_dvdprofiler.php samples/SampleCollection.xml
+```
+
+### Using HTTP API
+```bash
+# POST to /collections/import with multipart/form-data containing 'file' field
+curl -X POST http://localhost:8080/collections/import \
+  -F "file=@samples/SampleCollection.xml"
+```
+
+The import process:
+- Parses DVD Profiler XML export
+- Creates/updates films and editions
+- Syncs relationships (genres, studios, countries, crew, regions, subtitles, features)
+- Removes orphaned editions and films not in the import
+
 ## Common Composer tasks
 ```bash
 composer install          # install deps

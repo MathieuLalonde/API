@@ -7,12 +7,15 @@ use DI\ContainerBuilder;
 use PDO;
 use Psr\Container\ContainerInterface;
 use App\Infrastructure\Database\PdoFactory;
-use App\Domain\User\UserRepositoryInterface;
-use App\Infrastructure\Repository\PdoUserRepository;
-use App\Service\UserService;
-use App\Domain\Film\FilmRepositoryInterface;
+use App\Shared\Domain\User\UserRepositoryInterface;
+use App\Shared\Infrastructure\Repository\PdoUserRepository;
+use App\Shared\Service\UserService;
+use App\Collections\Domain\Film\FilmRepositoryInterface;
 use App\Infrastructure\Repository\PdoFilmRepository;
 use App\Infrastructure\Repository\PdoEditionRepository;
+use App\Collections\Service\ImportService;
+use App\Collections\Infrastructure\Repository\ImportRepository;
+use App\Collections\Infrastructure\Parser\DvdProfilerXmlParser;
 
 /**
  * Dependency Injection container configuration.
@@ -45,6 +48,22 @@ class ContainerFactory
             // Services
             UserService::class => function (ContainerInterface $c) {
                 return new UserService($c->get(UserRepositoryInterface::class));
+            },
+
+            // Import infrastructure
+            DvdProfilerXmlParser::class => function () {
+                return new DvdProfilerXmlParser();
+            },
+
+            ImportRepository::class => function (ContainerInterface $c) {
+                return new ImportRepository($c->get(PDO::class));
+            },
+
+            ImportService::class => function (ContainerInterface $c) {
+                return new ImportService(
+                    $c->get(DvdProfilerXmlParser::class),
+                    $c->get(ImportRepository::class)
+                );
             },
         ]);
 

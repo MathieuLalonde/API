@@ -7,9 +7,11 @@ services:
     volumes:
       - ./src:/var/www/src:cached
       - ./public:/var/www/public:cached
+      - ./bin:/var/www/bin:cached
       - ./composer.json:/var/www/composer.json:ro
       - ./composer.lock:/var/www/composer.lock:ro
       - vendor_data:/var/www/vendor
+      - ../manual_imports:/var/www/manual_imports:cached
     env_file: .env
     depends_on:
       - db
@@ -26,7 +28,7 @@ services:
       - php
 
   db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine # TODO: check version used by SiteGround
     env_file: .env
     environment:
       POSTGRES_DB: ${PG_DB}

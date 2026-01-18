@@ -3,13 +3,13 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Repository;
 
-use App\Domain\Film\FilmRepositoryInterface;
-use App\DTO\FilmDTO;
-use App\DTO\FilmListItemDTO;
-use App\DTO\EditionDTO;
-use App\DTO\AudioTrackDTO;
-use App\DTO\VideoFormatDTO;
-use App\DTO\EditionDiscDTO;
+use App\Collections\Domain\Film\FilmRepositoryInterface;
+use App\Collections\DTO\FilmDTO;
+use App\Collections\DTO\FilmListItemDTO;
+use App\Collections\DTO\EditionDTO;
+use App\Collections\DTO\AudioTrackDTO;
+use App\Collections\DTO\VideoFormatDTO;
+use App\Collections\DTO\EditionDiscDTO;
 use PDO;
 
 /**
