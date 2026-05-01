@@ -30,7 +30,7 @@ jobs:
         uses: dependabot/fetch-metadata@v2
 
       - name: Skip major and 0.x minor/patch updates
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         id: skip
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
 
       - name: Wait until PR is mergeable
         id: pr
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.AUTO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -86,7 +86,7 @@ jobs:
 
       - name: Verify checks and statuses
         id: checks
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -124,7 +124,7 @@ jobs:
         if: |
           steps.meta.outputs.update-type == 'version-update:semver-patch' ||
           steps.meta.outputs.update-type == 'version-update:semver-minor'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.AUTO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -138,7 +138,7 @@ jobs:
 
       - name: Delete branch (Best effort)
         if: ${{ steps.merge.outputs.merged == 'true' || false }}
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
