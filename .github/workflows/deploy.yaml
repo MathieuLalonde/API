@@ -63,6 +63,20 @@ jobs:
           echo "✓ Destination: ~/www/$REMOTE_PATH/ (vendor, composer.json)"
           echo "✓ Web root: ~/www/$REMOTE_PATH/public_html/ (from ./public/)"
 
+      - name: Ensure server .env
+        run: |
+          cat > server.env <<'EOF'
+          APP_ENV=production
+          PG_HOST=${{ secrets.PG_HOST }}
+          PG_PORT=${{ secrets.PG_PORT || '5432' }}
+          PG_DB=${{ secrets.PG_DB }}
+          PG_USER=${{ secrets.PG_USER }}
+          PG_PASSWORD=${{ secrets.PG_PASSWORD }}
+          PG_SSLMODE=${{ secrets.PG_SSLMODE || 'prefer' }}
+          EOF
+          scp -P $SSH_PORT server.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/.env
+          rm -f server.env
+
       # - name: Dry-run deployment
       #   run: |
       #     echo "========================================"
