@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Read Dependabot metadata
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       - name: Skip major and 0.x minor/patch updates
         uses: actions/github-script@v8
