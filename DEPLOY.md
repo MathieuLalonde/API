@@ -1,123 +1,52 @@
-# API Deployment Guide
+# API Deployment
 
-## Quick Start - Minimal Test
+Production: `https://api.mathieulalonde.com` on SiteGround shared hosting.
 
-### 1. Pre-flight Check (Local)
-Before pushing to GitHub, test your SSH connection:
+## Deploying
 
-```bash
-# Update the credentials in test-deploy.sh first, then run:
-bash test-deploy.sh
-```
+Manual, via GitHub Actions: run the **Build and deploy** workflow
+(`gh workflow run deploy.yaml --ref main`), or from the GitHub UI
+(*Actions → Build and deploy → Run workflow*).
 
-This will:
-- ✓ Test SSH connectivity
-- ✓ Verify remote directory exists
-- ✓ Show what rsync would transfer (dry-run)
+Inputs:
 
-### 2. Push to Deploy
-Once the local test passes:
+- **Commit SHA/tag** (optional) — defaults to the ref you dispatch from.
+- **deploy_env** (default off) — when enabled, writes `.env` on the server from
+  GitHub secrets (`PG_*`, `APP_ENV=production`). Enable it when secrets change
+  or on first setup; normal deploys leave the existing `.env` untouched.
 
-```bash
-git add .
-git commit -m "Initial PHP API setup"
-git push origin main
-```
+The workflow rsyncs `vendor/`, `src/`, `composer.json` to
+`~/www/api.mathieulalonde.com/` and `public/` to `public_html/`, then moves the
+`staging` tag to the deployed commit. Pushing to `main` does **not** deploy.
 
-The GitHub Action will automatically:
-1. Setup PHP 8.0 and install Composer dependencies
-2. Validate `REMOTE_PATH` matches `.com` domain
-3. Verify remote directory exists via SSH
-4. Run dry-run rsync to show pending changes
-5. Deploy entire project (vendor/, public/, composer.json) → `~/www/api.mathieulalonde.com/`
-6. Tag the deployment as `staging`
+## Required GitHub secrets
 
-### 3. Verify Deployment
-Visit: `https://api.mathieulalonde.com/`
+| Secret | Set from |
+|---|---|
+| `SSH_USER`, `SSH_HOST`, `SSH_PRIVATE_KEY` | SiteGround SSH credentials (port 18765) |
+| `PG_HOST` | `localhost` for the on-server app; site IP for remote (your PC) |
+| `PG_PORT` | `5432` |
+| `PG_DB`, `PG_USER`, `PG_PASSWORD` | Site Tools → PostgreSQL Manager |
+| `PG_SSLMODE` | `prefer` |
 
-Expected response:
-```json
-{
-  "status": "ok",
-  "message": "API is running",
-  "timestamp": "2025-12-19 10:30:00",
-  "version": "1.0.0"
-}
-```
+`PG_*` secrets are only read when the **deploy_env** toggle is on.
 
-Health check: `https://api.mathieulalonde.com/health`
+## Database
 
-## Safety Features
+PostgreSQL runs on SiteGround itself (Site Tools → PostgreSQL Manager). Schema
+is applied with Flyway — locally via Docker (`make flyway`), pointed at the
+remote DB by temporarily setting `FLYWAY_URL` to the remote host. Your IP must
+be whitelisted in PostgreSQL Manager → Remote for any off-server connection.
 
-The workflow now includes:
-- ✓ **REMOTE_PATH validation** - Must be a `.com` domain
-- ✓ **Remote directory check** - Fails if `~/www/api.mathieulalonde.com/public_html` doesn't exist
-- ✓ **Dry-run preview** - Shows all changes before actual deployment
-- ✓ **No accidental deploys** - Multiple guard checks prevent wrong-folder deploys
-
-## Project Structure
-
-```
-API/
-├── .github/workflows/deploy.yaml  # Auto-deploy on push to main
-├── public/
-│   ├── index.php     # Slim 4 app entry point (document root)
-│   └── .htaccess     # URL rewriting for clean routes
-├── vendor/           # Composer dependencies (deployed to server)
-├── composer.json     # PHP dependencies (Slim 4)
-└── probe.txt         # Deployment validation file
-```
-
-**SiteGround Structure After Deployment:**
-```
-~/www/api.mathieulalonde.com/
-├── public/          # This is your document root
-│   ├── index.php
-│   └── .htaccess
-├── vendor/
-│   └── autoload.php
-└── composer.json
-```
-
-## Local Development
-
-1. Install dependencies:
-```bash
-composer install
-```
-
-2. Run locally with PHP built-in server:
-```bash
-php -S localhost:8000 -t public
-```
-
-3. Test the endpoint:
-```bash
-curl http://localhost:8000/
-```
-
-## Next Steps
-
-1. **Add MySQL Connection**: Update `public/index.php` to connect to SiteGround MySQL
-2. **Create API Routes**: Add endpoints for your data in `public/index.php` or separate route files
-3. **Environment Config**: Add `.env` file for database credentials (excluded from deployment)
-4. **Error Handling**: Add Slim error middleware for production
-5. **CORS**: Add CORS headers if accessed from frontend
+The `.env` on the server sits next to `composer.json`, one level above the web
+root, and is not web-accessible.
 
 ## Troubleshooting
 
-**SSH Connection Failed**
-- Verify secrets are set in GitHub: Settings → Secrets → Actions
-  - `SSH_USER`, `SSH_HOST`, `SSH_PRIVATE_KEY`
-- Check SiteGround SSH is enabled: Site Tools → Dev → SSH Keys
-
-**Remote Directory Not Found**
-- Check domain spelling: `REMOTE_PATH: api.mathieulalonde.com`
-- Verify domain exists in SiteGround: Sites → Manage → Domains
-- Check folder: `~/www/api.mathieulalonde.com/`
-- Verify `public/` is set as document root in SiteGround domain settings
-
-**Deployment Successful but 500 Error**
-- Check PHP error logs in SiteGround: Site Tools → Logs → Error Log
-- Verify PHP version: Site Tools → Dev → PHP Manager (must be 8.0+)
-- Check `vendor/` was deployed (composer install ran)
+- **404 on `/`** — expected; the API redirects `/` to mathieulalonde.com.
+- **`PG_HOST is not set`** — `.env` missing on server: run a deploy with
+  **deploy_env** enabled.
+- **Stale responses after deploy** — verify `Cache-Control: no-store` headers
+  (added by `NoCacheMiddleware`); cache-bust with `?v=$RANDOM` if needed.
+- **Remote connection refused** — whitelist your IP in PostgreSQL Manager →
+  Remote, or tunnel over SSH (port 18765).

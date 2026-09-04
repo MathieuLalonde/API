@@ -46,11 +46,13 @@ class AppConfig
 
     public static function isDev(): bool
     {
-        return self::get('APP_ENV', 'development') === 'development';
+        // Fail-safe: unset APP_ENV means production (no public error traces)
+        return self::get('APP_ENV', 'production') === 'development';
     }
 
     public static function isProduction(): bool
     {
-        return self::get('APP_ENV', 'development') === 'production';
+        // Fail-safe: unset APP_ENV means production (no public error traces)
+        return self::get('APP_ENV', 'production') === 'production';
     }
 }

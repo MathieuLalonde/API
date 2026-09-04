@@ -21,6 +21,9 @@ $app = AppFactory::create();
 // Add CORS middleware before routes
 $app->add(new CorsMiddleware());
 
+// Mark all responses as uncacheable (SiteGround proxy otherwise caches GETs)
+$app->add(new NoCacheMiddleware());
+
 // Register routes
 $registerRoutes = require __DIR__ . '/../src/Routes/routes.php';
 $registerRoutes($app);

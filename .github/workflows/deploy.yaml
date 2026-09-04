@@ -6,9 +6,15 @@ on:
       commit_sha:
         description: "Commit SHA/tag to use (optional):"
         required: false
+      deploy_env:
+        description: "Write .env to server from secrets (PG_*, APP_ENV)"
+        type: boolean
+        required: false
+        default: false
 
 env:
   SELECTED_COMMIT: ${{ inputs.commit_sha || github.sha }}
+  DEPLOY_ENV: ${{ inputs.deploy_env }}
   SSH_PORT: 18765
   # Required secrets:
   # - SSH_USER
@@ -64,6 +70,7 @@ jobs:
           echo "✓ Web root: ~/www/$REMOTE_PATH/public_html/ (from ./public/)"
 
       - name: Ensure server .env
+        if: env.DEPLOY_ENV == 'true'
         run: |
           cat > server.env <<'EOF'
           APP_ENV=production
