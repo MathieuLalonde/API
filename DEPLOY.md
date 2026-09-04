@@ -24,12 +24,16 @@ The workflow rsyncs `vendor/`, `src/`, `composer.json` to
 | Secret | Set from |
 |---|---|
 | `SSH_USER`, `SSH_HOST`, `SSH_PRIVATE_KEY` | SiteGround SSH credentials (port 18765) |
-| `PG_HOST` | `localhost` for the on-server app; site IP for remote (your PC) |
-| `PG_PORT` | `5432` |
 | `PG_DB`, `PG_USER`, `PG_PASSWORD` | Site Tools → PostgreSQL Manager |
-| `PG_SSLMODE` | `prefer` |
 
-`PG_*` secrets are only read when the **deploy_env** toggle is on.
+Host, port, and SSL mode are hardcoded in the workflow's env step
+(`PG_HOST=localhost` for the on-server app). If the DB must be reached by site
+IP instead (e.g. `localhost` refuses connections), that's a one-line diff in
+`deploy.yaml`. Your IP must be whitelisted in PostgreSQL Manager → Remote for
+any off-server connection (imports, Flyway, psql from your machine).
+
+`PG_DB`, `PG_USER` and `PG_PASSWORD` are only read when the **deploy_env**
+toggle is on.
 
 ## Database
 
