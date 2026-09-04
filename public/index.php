@@ -6,6 +6,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use Slim\Factory\AppFactory;
 use App\Config\AppConfig;
 use App\Bootstrap\ContainerFactory;
+use App\Infrastructure\Http\CorsMiddleware;
 
 // Load environment configuration
 AppConfig::load();
@@ -16,6 +17,9 @@ $container = ContainerFactory::create();
 // Create app with DI container
 AppFactory::setContainer($container);
 $app = AppFactory::create();
+
+// Add CORS middleware before routes
+$app->add(new CorsMiddleware());
 
 // Register routes
 $registerRoutes = require __DIR__ . '/../src/Routes/routes.php';
