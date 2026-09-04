@@ -535,22 +535,24 @@ class ImportService
     private function importFilm(SimpleXMLElement $dvd): int
     {
         $title = isset($dvd->Title) ? (string)$dvd->Title : null;
-        $sortTitle = isset($dvd->SortTitle) ? (string)$dvd->SortTitle : null;
+        $sortTitleRaw = isset($dvd->SortTitle) ? (string)$dvd->SortTitle : null;
+        $sortTitle = TitleNormalizer::normalizeSeasonNumbers($sortTitleRaw);
         $origTitle = isset($dvd->OriginalTitle) ? (string)$dvd->OriginalTitle : null;
         $yearRaw = isset($dvd->ProductionYear) ? (string)$dvd->ProductionYear : '';
         $year = ($yearRaw !== '' && (int)$yearRaw > 0) ? (int)$yearRaw : null;
         $runtime = isset($dvd->RunningTime) && (string)$dvd->RunningTime !== '' ? (int)$dvd->RunningTime : null;
 
-        // Build candidate normalized titles
+        // Build candidate normalized titles (use raw sort title for matching to preserve original matching logic)
         $candidates = array_filter([
             TitleNormalizer::normalize($title),
-            TitleNormalizer::normalize($sortTitle),
+            TitleNormalizer::normalize($sortTitleRaw),
             TitleNormalizer::normalize($origTitle),
         ]);
 
         $filmId = null;
+        $titleNorm = TitleNormalizer::normalize($title);
         if ($year && !empty($candidates)) {
-            $filmId = $this->repository->findFilmByTitleAndYear($year, $candidates);
+            $filmId = $this->repository->findFilmByTitleAndYear($year, $candidates, $titleNorm);
         }
 
         // Extract rating info
@@ -780,7 +782,23 @@ class ImportService
             $otherFeatures = $otherFeaturesText === '' ? null : $otherFeaturesText;
         }
 
-        return $this->repository->upsertEdition([
+        // Extract media types from MediaTypes (DVD Profiler uses <DVD>, <BluRay>, <UltraHD>; we store DVD, BLURAY, UHD)
+        $mediaTypes = [];
+        if (isset($dvd->MediaTypes)) {
+            if (isset($dvd->MediaTypes->DVD) && filter_var($dvd->MediaTypes->DVD, FILTER_VALIDATE_BOOLEAN)) {
+                $mediaTypes[] = 'DVD';
+            }
+            if (isset($dvd->MediaTypes->BluRay) && filter_var($dvd->MediaTypes->BluRay, FILTER_VALIDATE_BOOLEAN)) {
+                $mediaTypes[] = 'BLURAY';
+            }
+            // DVD Profiler exports <UltraHD>, not <UHD>
+            if ((isset($dvd->MediaTypes->UltraHD) && filter_var($dvd->MediaTypes->UltraHD, FILTER_VALIDATE_BOOLEAN))
+                || (isset($dvd->MediaTypes->UHD) && filter_var($dvd->MediaTypes->UHD, FILTER_VALIDATE_BOOLEAN))) {
+                $mediaTypes[] = 'UHD';
+            }
+        }
+        
+        $editionId = $this->repository->upsertEdition([
             'film_id' => $filmId,
             'external_id' => $externalId,
             'external_id_base' => (string)$dvd->ID_Base,
@@ -789,13 +807,18 @@ class ImportService
             'external_variant_num' => (int)$dvd->ID_VariantNum ?: null,
             'upc' => (string)$dvd->UPC ?: null,
             'release_date' => (string)$dvd->Released ?: null,
-            'media_type' => (string)$dvd->MediaTypes->MediaType ?? 'UNKNOWN',
+            'name' => isset($dvd->DistTrait) ? (trim((string)$dvd->DistTrait) ?: null) : null,
             'distributor' => $distributor,
             'last_edited_at' => $lastEditedAt,
             'case_type' => $caseType,
             'case_slip_cover' => $caseSlipCover,
             'other_features' => $otherFeatures,
         ]);
+        
+        // Sync media types to edition_media_type (DVD, BLURAY, UHD only)
+        $this->repository->syncEditionMediaTypes($editionId, $mediaTypes);
+        
+        return $editionId;
     }
 
     /**
@@ -843,13 +866,15 @@ class ImportService
         if (isset($dvd->Discs->Disc)) {
             $discNumber = 1;
             foreach ($dvd->Discs->Disc as $disc) {
-                // Build notes for side info if dual-sided
+                // Build notes for side info only when there is content on side B
                 $notes = null;
-                if (isset($disc->DiscIDSideA) && isset($disc->DiscIDSideB)) {
+                $hasSideB = isset($disc->DescriptionSideB) && trim((string)$disc->DescriptionSideB) !== ''
+                    || isset($disc->DiscIDSideB) && trim((string)$disc->DiscIDSideB) !== '';
+                if ($hasSideB) {
                     $notes = sprintf(
                         "Side A: %s | Side B: %s",
-                        (string)$disc->DescriptionSideA ?: 'N/A',
-                        (string)$disc->DescriptionSideB ?: 'N/A'
+                        (string)($disc->DescriptionSideA ?? '') ?: 'N/A',
+                        (string)($disc->DescriptionSideB ?? '') ?: 'N/A'
                     );
                 }
 

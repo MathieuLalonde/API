@@ -35,6 +35,8 @@ class ImportRepository
     private PDOStatement $insertFilmCrewStmt;
     private PDOStatement $deleteEditionRegionStmt;
     private PDOStatement $insertEditionRegionStmt;
+    private PDOStatement $deleteEditionMediaTypeStmt;
+    private PDOStatement $insertEditionMediaTypeStmt;
     private PDOStatement $deleteEditionSubtitleStmt;
     private PDOStatement $insertEditionSubtitleStmt;
     private PDOStatement $insertEditionFeatureStmt;
@@ -132,7 +134,7 @@ class ImportRepository
                 external_variant_num,
                 upc,
                 release_date,
-                media_type,
+                name,
                 distributor,
                 last_edited_at,
                 case_type,
@@ -148,7 +150,7 @@ class ImportRepository
                 :external_variant_num,
                 :upc,
                 :release_date,
-                :media_type,
+                :name,
                 :distributor,
                 :last_edited_at,
                 :case_type,
@@ -159,7 +161,7 @@ class ImportRepository
             DO UPDATE SET
                 upc = EXCLUDED.upc,
                 release_date = EXCLUDED.release_date,
-                media_type = EXCLUDED.media_type,
+                name = EXCLUDED.name,
                 distributor = EXCLUDED.distributor,
                 last_edited_at = EXCLUDED.last_edited_at,
                 case_type = EXCLUDED.case_type,
@@ -277,6 +279,9 @@ class ImportRepository
         $this->deleteEditionRegionStmt = $pdo->prepare("DELETE FROM edition_region WHERE edition_id = ?");
         $this->insertEditionRegionStmt = $pdo->prepare("INSERT INTO edition_region (edition_id, region_code) VALUES (?, ?) ON CONFLICT DO NOTHING");
 
+        $this->deleteEditionMediaTypeStmt = $pdo->prepare("DELETE FROM edition_media_type WHERE edition_id = ?");
+        $this->insertEditionMediaTypeStmt = $pdo->prepare("INSERT INTO edition_media_type (edition_id, media_type) VALUES (?, ?) ON CONFLICT DO NOTHING");
+
         $this->deleteEditionSubtitleStmt = $pdo->prepare("DELETE FROM edition_subtitle WHERE edition_id = ?");
         $this->insertEditionSubtitleStmt = $pdo->prepare("INSERT INTO edition_subtitle (edition_id, language) VALUES (?, ?) ON CONFLICT DO NOTHING");
 
@@ -293,9 +298,10 @@ class ImportRepository
      *
      * @param int|null $year Production year (can be null for TV shows)
      * @param array<string> $candidates Normalized title candidates
+     * @param string|null $incomingTitleNorm Normalized main title (first candidate); used to avoid merging different volumes
      * @return int|null Film ID or null if not found
      */
-    public function findFilmByTitleAndYear(?int $year, array $candidates): ?int
+    public function findFilmByTitleAndYear(?int $year, array $candidates, ?string $incomingTitleNorm = null): ?int
     {
         if (empty($candidates) || $year === null) {
             return null;
@@ -316,6 +322,10 @@ class ImportRepository
                 if ($candidate === $filmTitleNorm ||
                     ($filmOrigTitleNorm !== null && $candidate === $filmOrigTitleNorm) ||
                     ($filmSortTitleNorm !== null && $candidate === $filmSortTitleNorm)) {
+                    // Don't merge different volumes (e.g. "Volume One" vs "Volume Two: The War Years")
+                    if ($incomingTitleNorm !== null && !TitleNormalizer::sameVolumeOrNoVolume($incomingTitleNorm, $filmTitleNorm)) {
+                        continue;
+                    }
                     return (int)$film['id'];
                 }
             }
@@ -629,6 +639,40 @@ class ImportRepository
         foreach ($validRegions as $region) {
             $params[] = $editionId;
             $params[] = $region;
+        }
+        $stmt->execute($params);
+    }
+
+    /**
+     * Sync edition media types (delete existing, insert new).
+     *
+     * @param int $editionId Edition ID
+     * @param array<string> $mediaTypes Media types: 'DVD', 'BLURAY', 'UHD'
+     */
+    public function syncEditionMediaTypes(int $editionId, array $mediaTypes): void
+    {
+        $this->deleteEditionMediaTypeStmt->execute([$editionId]);
+        
+        // Filter and validate media types (only allow known values)
+        $validTypes = ['DVD', 'BLURAY', 'UHD'];
+        $filteredTypes = array_filter($mediaTypes, fn($type) => in_array($type, $validTypes, true));
+        
+        if (empty($filteredTypes)) {
+            return;
+        }
+        
+        // Batch insert
+        $values = implode(',', array_fill(0, count($filteredTypes), '(?, ?)'));
+        $stmt = $this->pdo->prepare("
+            INSERT INTO edition_media_type (edition_id, media_type) 
+            VALUES {$values} 
+            ON CONFLICT DO NOTHING
+        ");
+        
+        $params = [];
+        foreach ($filteredTypes as $mediaType) {
+            $params[] = $editionId;
+            $params[] = $mediaType;
         }
         $stmt->execute($params);
     }

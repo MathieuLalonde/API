@@ -24,7 +24,7 @@ class PdoEditionRepository
     public function findById(int $id): ?EditionDTO
     {
         $stmt = $this->pdo->prepare("
-            SELECT id, film_id, external_id, upc, release_date, media_type
+            SELECT id, film_id, external_id, upc, release_date, name
             FROM edition
             WHERE id = ?
         ");
@@ -41,11 +41,41 @@ class PdoEditionRepository
             externalId: $row['external_id'],
             upc: $row['upc'],
             releaseDate: $row['release_date'],
-            mediaType: $row['media_type'],
+            name: $row['name'] ?? null,
+            mediaTypes: $this->fetchMediaTypes($id),
+            regions: $this->fetchRegions($id),
             audio: $this->fetchAudioTracks($id),
             video: $this->fetchVideoFormats($id),
             discs: $this->fetchEditionDiscs($id)
         );
+    }
+
+    private function fetchMediaTypes(int $editionId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT media_type
+            FROM edition_media_type
+            WHERE edition_id = ?
+            ORDER BY media_type
+        ");
+        $stmt->execute([$editionId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(fn($row) => $row['media_type'], $rows);
+    }
+
+    private function fetchRegions(int $editionId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT region_code
+            FROM edition_region
+            WHERE edition_id = ?
+            ORDER BY region_code
+        ");
+        $stmt->execute([$editionId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(fn($row) => $row['region_code'], $rows);
     }
 
     private function fetchAudioTracks(int $editionId): array

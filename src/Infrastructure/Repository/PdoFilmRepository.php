@@ -75,7 +75,7 @@ class PdoFilmRepository implements FilmRepositoryInterface
 
         $sql .= "
             GROUP BY f.id, f.title, f.production_year
-            ORDER BY f.title
+            ORDER BY COALESCE(f.sort_title, f.title)
             LIMIT ? OFFSET ?
         ";
 
@@ -116,7 +116,7 @@ class PdoFilmRepository implements FilmRepositoryInterface
     private function fetchEditionsByFilmId(int $filmId): array
     {
         $stmt = $this->pdo->prepare("
-            SELECT id, film_id, external_id, upc, release_date, media_type
+            SELECT id, film_id, external_id, upc, release_date, name
             FROM edition
             WHERE film_id = ?
             ORDER BY release_date, id
@@ -134,7 +134,9 @@ class PdoFilmRepository implements FilmRepositoryInterface
                 externalId: $row['external_id'],
                 upc: $row['upc'],
                 releaseDate: $row['release_date'],
-                mediaType: $row['media_type'],
+                name: $row['name'] ?? null,
+                mediaTypes: $this->fetchMediaTypes($editionId),
+                regions: $this->fetchRegions($editionId),
                 audio: $this->fetchAudioTracks($editionId),
                 video: $this->fetchVideoFormats($editionId),
                 discs: $this->fetchEditionDiscs($editionId)
@@ -142,6 +144,34 @@ class PdoFilmRepository implements FilmRepositoryInterface
         }
 
         return $editions;
+    }
+
+    private function fetchMediaTypes(int $editionId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT media_type
+            FROM edition_media_type
+            WHERE edition_id = ?
+            ORDER BY media_type
+        ");
+        $stmt->execute([$editionId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(fn($row) => $row['media_type'], $rows);
+    }
+
+    private function fetchRegions(int $editionId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT region_code
+            FROM edition_region
+            WHERE edition_id = ?
+            ORDER BY region_code
+        ");
+        $stmt->execute([$editionId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(fn($row) => $row['region_code'], $rows);
     }
 
     private function fetchAudioTracks(int $editionId): array

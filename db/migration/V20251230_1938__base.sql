@@ -26,7 +26,7 @@ CREATE TABLE edition (
     upc                 TEXT,
     release_date        DATE,
 
-    media_type          TEXT NOT NULL, -- DVD | BLURAY | UHD
+    name                TEXT,
     distributor         TEXT,
 
     last_edited_at      TIMESTAMPTZ
