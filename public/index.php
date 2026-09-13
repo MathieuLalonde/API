@@ -7,6 +7,7 @@ use Slim\Factory\AppFactory;
 use App\Config\AppConfig;
 use App\Bootstrap\ContainerFactory;
 use App\Infrastructure\Http\CorsMiddleware;
+use App\Infrastructure\Http\NoCacheMiddleware;
 
 // Load environment configuration
 AppConfig::load();
