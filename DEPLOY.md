@@ -2,6 +2,13 @@
 
 Production: `https://api.mathieulalonde.com` on SiteGround shared hosting.
 
+## Config model
+
+- **`.env`** (not committed) — environment values and secrets. Defaults for
+  `PG_PORT` / `PG_SSLMODE` also live in `PdoFactory` if a key is missing.
+- **`.env.example`** — committed template of those keys.
+- **Deploy `deploy_env`** — writes the prod `.env` from step env + GitHub secrets.
+
 ## Deploying
 
 Manual, via GitHub Actions: run the **Build and deploy** workflow
@@ -12,8 +19,9 @@ Inputs:
 
 - **Commit SHA/tag** (optional) — defaults to the ref you dispatch from.
 - **deploy_env** (default off) — when enabled, writes `.env` on the server from
-  GitHub secrets (`PG_*`, `APP_ENV=production`). Enable it when secrets change
-  or on first setup; normal deploys leave the existing `.env` untouched.
+  GitHub secrets (`PG_DB` / `PG_USER` / `PG_PASSWORD`) plus `APP_ENV`,
+  `PG_HOST`, `PG_PORT`, `PG_SSLMODE`. Enable it when secrets change or on first
+  setup; normal deploys leave the existing `.env` untouched.
 
 The workflow rsyncs `vendor/`, `src/`, `composer.json` to
 `~/www/api.mathieulalonde.com/` and `public/` to `public_html/`, then moves the
@@ -26,11 +34,11 @@ The workflow rsyncs `vendor/`, `src/`, `composer.json` to
 | `SSH_USER`, `SSH_HOST`, `SSH_PRIVATE_KEY` | SiteGround SSH credentials (port 18765) |
 | `PG_DB`, `PG_USER`, `PG_PASSWORD` | Site Tools → PostgreSQL Manager |
 
-Host, port, and SSL mode are hardcoded in the workflow's env step
-(`PG_HOST=localhost` for the on-server app). If the DB must be reached by site
-IP instead (e.g. `localhost` refuses connections), that's a one-line diff in
-`deploy.yaml`. Your IP must be whitelisted in PostgreSQL Manager → Remote for
-any off-server connection (imports, Flyway, psql from your machine).
+Non-secret DB settings (`APP_ENV=production`, `PG_HOST=localhost`, port, sslmode)
+live on the Ensure server .env step's `env:` block. If `localhost` refuses
+connections, change `PG_HOST` there to the site IP. Your IP must be whitelisted
+in PostgreSQL Manager → Remote for any off-server connection (imports, Flyway,
+psql from your machine).
 
 `PG_DB`, `PG_USER` and `PG_PASSWORD` are only read when the **deploy_env**
 toggle is on.

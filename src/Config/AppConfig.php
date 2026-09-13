@@ -7,7 +7,7 @@ use Dotenv\Dotenv;
 
 /**
  * Application configuration loader.
- * Loads environment variables from .env (local dev) or server environment (production).
+ * Loads environment variables from .env when present (local or shared-hosting prod).
  */
 class AppConfig
 {
@@ -19,7 +19,6 @@ class AppConfig
             return;
         }
 
-        // Load .env file if it exists (local development)
         if (file_exists(__DIR__ . '/../../.env')) {
             $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
             $dotenv->load();

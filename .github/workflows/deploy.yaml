@@ -16,14 +16,10 @@ env:
   SELECTED_COMMIT: ${{ inputs.commit_sha || github.sha }}
   DEPLOY_ENV: ${{ inputs.deploy_env }}
   SSH_PORT: 18765
-  # Required secrets:
-  # - SSH_USER
-  # - SSH_HOST
-  # - SSH_PRIVATE_KEY
-  # Required variables for each environment:
   REMOTE_PATH: api.mathieulalonde.com
-  # Optional for staging environment:
-  # - BUILD_ARGUMENTS
+  # Required secrets:
+  # - SSH_USER, SSH_HOST, SSH_PRIVATE_KEY
+  # - PG_DB, PG_USER, PG_PASSWORD (only when deploy_env=true)
 
 jobs:
   deploy:
@@ -71,15 +67,23 @@ jobs:
 
       - name: Ensure server .env
         if: env.DEPLOY_ENV == 'true'
+        env:
+          APP_ENV: production
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_SSLMODE: prefer
+          PG_DB: ${{ secrets.PG_DB }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
         run: |
-          cat > server.env <<'EOF'
-          APP_ENV=production
-          PG_HOST=localhost
-          PG_PORT=5432
-          PG_DB=${{ secrets.PG_DB }}
-          PG_USER=${{ secrets.PG_USER }}
-          PG_PASSWORD=${{ secrets.PG_PASSWORD }}
-          PG_SSLMODE=prefer
+          cat > server.env <<EOF
+          APP_ENV=$APP_ENV
+          PG_HOST=$PG_HOST
+          PG_PORT=$PG_PORT
+          PG_DB=$PG_DB
+          PG_USER=$PG_USER
+          PG_PASSWORD=$PG_PASSWORD
+          PG_SSLMODE=$PG_SSLMODE
           EOF
           scp -P $SSH_PORT server.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/.env
           rm -f server.env
@@ -89,10 +93,11 @@ jobs:
       #     echo "========================================"
       #     echo "DRY RUN - No files will be changed"
       #     echo "========================================"
-      #     echo "Step 1: Deploy vendor/ & composer.json to ~/www/$REMOTE_PATH/"
+      #     echo "Step 1: Deploy vendor/, src/, & composer.json to ~/www/$REMOTE_PATH/"
       #     rsync -chavzn --delete-after --keep-dirlinks \
       #       -e "ssh -p $SSH_PORT" \
       #       --include='vendor/***' \
+      #       --include='src/***' \
       #       --include='composer.json' \
       #       --exclude='*' \
       #       ./ \
