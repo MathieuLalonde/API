@@ -22,9 +22,10 @@ Inputs:
   GitHub secrets (`PG_DB` / `PG_USER` / `PG_PASSWORD`) plus `APP_ENV`,
   `PG_HOST`, `PG_PORT`, `PG_SSLMODE`. Enable it when secrets change or on first
   setup; normal deploys leave the existing `.env` untouched.
-- **run_migrations** (default off) — when enabled, opens an SSH tunnel to the
-  SiteGround account and runs Flyway (`db/migration/` only) against Postgres on
-  the server’s `localhost:5432`. Use when schema changed or on first setup.
+- **run_migrations** (default off) — syncs `db/migration/` + `bin/migrate.php`
+  to the server and runs `php bin/migrate.php` over SSH (PDO to local
+  Postgres). SiteGround blocks SSH TCP forwarding, so Flyway-on-the-runner
+  via tunnel does not work; local Docker still uses Flyway.
 
 The workflow rsyncs `vendor/`, `src/`, `composer.json` to
 `~/www/api.mathieulalonde.com/` and `public/` to `public_html/`, then moves the
@@ -48,16 +49,16 @@ connections, change `PG_HOST` there to the site IP.
 
 PostgreSQL runs on SiteGround itself (Site Tools → PostgreSQL Manager).
 
-Schema is applied with Flyway (`db/migration/`):
+Schema is applied from `db/migration/` (`VyyyyMMdd_HHmm__*.sql`):
 
-- **Local:** Docker (`make flyway` / `make migrate`).
-- **Production:** GitHub Actions with **run_migrations** — SSH tunnel from the
-  runner to the account shell, then Flyway → `127.0.0.1:5432` on the server
-  (same local path the PHP app uses). No PostgreSQL Remote whitelist needed for
-  that path.
+- **Local:** Flyway via Docker (`make flyway` / `make migrate`).
+- **Production:** `php bin/migrate.php` over SSH when **run_migrations** is on
+  (same `localhost` Postgres path as the app). Tracks applied versions in
+  `public.schema_migrations`.
 
 Direct remote access (psql/Flyway from your laptop to the site IP) still needs
-your IP in PostgreSQL Manager → Remote.
+your IP in PostgreSQL Manager → Remote. An SSH tunnel from CI to Postgres is
+not viable on shared hosting (TCP forwarding disabled / connection reset).
 
 The `.env` on the server sits next to `composer.json`, one level above the web
 root, and is not web-accessible.
@@ -71,5 +72,6 @@ root, and is not web-accessible.
   (added by `NoCacheMiddleware`); cache-bust with `?v=$RANDOM` if needed.
 - **Remote connection refused** — for laptop access, whitelist your IP in
   PostgreSQL Manager → Remote. CI migrations use the SSH tunnel instead.
-- **Flyway fails in CI** — check the Run Flyway step log; confirm SSH still
-  works and `PG_*` secrets match Site Tools.
+- **Flyway / migrate fails in CI** — prod uses `php bin/migrate.php` over SSH,
+  not a DB tunnel. Check that step’s log; confirm `.env` exists on the server
+  and `pdo_pgsql` is enabled in Site Tools → PHP.
