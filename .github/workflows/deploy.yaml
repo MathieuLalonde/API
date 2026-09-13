@@ -11,15 +11,21 @@ on:
         type: boolean
         required: false
         default: false
+      run_migrations:
+        description: "Run Flyway against prod Postgres via SSH tunnel"
+        type: boolean
+        required: false
+        default: false
 
 env:
   SELECTED_COMMIT: ${{ inputs.commit_sha || github.sha }}
   DEPLOY_ENV: ${{ inputs.deploy_env }}
+  RUN_MIGRATIONS: ${{ inputs.run_migrations }}
   SSH_PORT: 18765
   REMOTE_PATH: api.mathieulalonde.com
   # Required secrets:
   # - SSH_USER, SSH_HOST, SSH_PRIVATE_KEY
-  # - PG_DB, PG_USER, PG_PASSWORD (only when deploy_env=true)
+  # - PG_DB, PG_USER, PG_PASSWORD (when deploy_env or run_migrations)
 
 jobs:
   deploy:
@@ -87,6 +93,55 @@ jobs:
           EOF
           scp -P $SSH_PORT server.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/www/$REMOTE_PATH/.env
           rm -f server.env
+
+      # Flyway cannot run on SiteGround shared hosting. Open an SSH tunnel to the
+      # account shell and forward local 5432 → server localhost:5432 (same path
+      # the PHP app uses). Postgres sees a local connection; no Remote whitelist.
+      - name: Run Flyway migrations via SSH tunnel
+        if: env.RUN_MIGRATIONS == 'true'
+        env:
+          PG_DB: ${{ secrets.PG_DB }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${PG_DB:?PG_DB secret is required}"
+          : "${PG_USER:?PG_USER secret is required}"
+          : "${PG_PASSWORD:?PG_PASSWORD secret is required}"
+
+          SOCK="$HOME/.ssh/flyway-tunnel.sock"
+          REMOTE="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+
+          ssh -fN -M -S "$SOCK" \
+            -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=30 \
+            -L 5432:127.0.0.1:5432 \
+            -p "$SSH_PORT" \
+            "$REMOTE"
+
+          cleanup() {
+            ssh -S "$SOCK" -O exit "$REMOTE" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 30); do
+            if nc -z 127.0.0.1 5432 2>/dev/null; then
+              echo "✓ SSH tunnel listening on 127.0.0.1:5432"
+              break
+            fi
+            sleep 1
+          done
+          nc -z 127.0.0.1 5432 2>/dev/null || { echo "Tunnel port 5432 not open"; exit 1; }
+
+          docker run --rm --network host \
+            -v "$PWD/db/migration:/flyway/sql:ro" \
+            -e "FLYWAY_URL=jdbc:postgresql://127.0.0.1:5432/${PG_DB}" \
+            -e "FLYWAY_USER=${PG_USER}" \
+            -e "FLYWAY_PASSWORD=${PG_PASSWORD}" \
+            -e FLYWAY_LOCATIONS=filesystem:/flyway/sql \
+            -e FLYWAY_CONNECT_RETRIES=10 \
+            flyway/flyway:11 \
+            migrate
 
       # - name: Dry-run deployment
       #   run: |
